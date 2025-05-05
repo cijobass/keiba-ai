@@ -4,3 +4,4 @@ lxml
 pandas
 selenium
 scikit-learn
+matplotlib
