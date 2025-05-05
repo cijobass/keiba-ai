@@ -6,3 +6,4 @@ selenium
 scikit-learn
 matplotlib
 jupytext
+imbalanced-learn

@@ -26,13 +26,12 @@ df['finish_time'] = df['finish_time'].apply(to_sec)
 
 # --- 5. length_behind_winner を float に変換 ---
 def to_length(x):
-    if pd.isna(x): 
+    if pd.isna(x):
         return np.nan
-    if 'クビ' in x: 
+    if 'クビ' in x:
         return 0.25
-    if 'アタマ' in x: 
+    if 'アタマ' in x:
         return 0.2
-    # 例: "3-3/4" → ["3","3","4"]
     parts = x.replace('-', ' ').replace('/', ' ').split()
     try:
         if len(parts) == 3:
@@ -47,8 +46,15 @@ df['length_behind_winner'] = df['length_behind_winner'].apply(to_length)
 drop_cols = [c for c in df.columns if c.startswith('running_position_')]
 df = df.drop(columns=drop_cols)
 
-# --- 7. 不要な列削除 ---
-df = df.drop(['race_id', 'horse_id', 'horse_name', 'finishing_position'], axis=1)
+# --- 7. 不要な列削除 --- 
+#     finish_time はほぼ全て NaN のため、モデル学習時の混乱を避けるため除外
+df = df.drop([
+    'race_id',
+    'horse_id',
+    'horse_name',
+    'finishing_position',
+    'finish_time'
+], axis=1)
 
 # --- 8. カテゴリ変数のエンコーディング ---
 df = pd.get_dummies(df, columns=['jockey', 'trainer'], drop_first=True)
