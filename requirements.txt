@@ -5,3 +5,4 @@ pandas
 selenium
 scikit-learn
 matplotlib
+jupytext
