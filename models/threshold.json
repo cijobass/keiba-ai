@@ -1,4 +1,6 @@
 {
-  "best_threshold": 0.39,
-  "best_f1_score": 0.7457272410184862
+  "model": "models/keiba_rf_model_tuned.pkl",
+  "data": "data/processed/processed_data.csv",
+  "threshold": 0.46,
+  "f1_score": 0.7267037502170884
 }
