@@ -7,3 +7,4 @@ scikit-learn
 matplotlib
 jupytext
 imbalanced-learn
+webdriver-manager

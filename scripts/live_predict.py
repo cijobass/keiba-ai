@@ -12,7 +12,7 @@ import joblib
 import pandas as pd
 import numpy as np
 from sklearn.metrics import precision_score, recall_score, f1_score
-from scraper.race_result_scraper import get_race_result
+from scraper.race_result_selenium import get_race_result
 from scraper.race_entry_scraper import get_race_entry  # あとで作成します
 
 # --- 前処理ヘルパー --- 
@@ -37,33 +37,30 @@ def to_length(x):
 
 def preprocess_entry(df: pd.DataFrame, model_features):
     """
-    df: get_race_entry で取ってきた出馬表DF
-    model_features: モデルが期待する特徴量リスト
+    df: get_race_entry() が返す DataFrame（index=horse_number）
+    model_features: model.feature_names_in_
     """
-    # ● 1) 必要なカラムリネーム
+    # 1) 英語カラム名に揃える
     df = df.rename(columns={
-        '馬番':'horse_number',
-        '斤量':'actual_weight',
-        '馬体重':'declared_horse_weight',
-        '枠番':'draw',
-        '騎手':'jockey',
-        '調教師':'trainer',
+        'frame':            'draw',
+        'weight':           'actual_weight',
+        'declared_weight':  'declared_horse_weight',
+        # jockey, trainer, win_odds は既に正しい
     })
 
-    # ● 2) 欠損用のカラムを追加 (モデルが期待する)
+    # 2) 必要な数値列を追加
     df['length_behind_winner'] = np.nan
     df['finish_time']         = np.nan
-    df['win_odds']            = df['単勝オッズ'].astype(float)  # 例
 
-    # ● 3) カテゴリONE-HOT化
-    df = pd.get_dummies(
-        df,
-        columns=['jockey','trainer'],
-        drop_first=True
-    )
+    # 3) win_odds はもう英語なのでこちらを使う
+    df['win_odds'] = df['win_odds'].astype(float)
 
-    # ● 4) モデル期待カラムに合わせる（足りない列は0で埋める）
+    # 4) jockey/trainer の one-hot（スクレイパーが既に英語ならOK）
+    df = pd.get_dummies(df, columns=['jockey','trainer'], drop_first=True)
+
+    # 5) 最終的にモデルの期待列で reindex
     df = df.reindex(columns=model_features, fill_value=0)
+
     return df
 
 def main(race_id, model_path, thresh_path):
@@ -73,6 +70,7 @@ def main(race_id, model_path, thresh_path):
     threshold = info.get('best_threshold', info.get('threshold'))
     
     # --- 2) 出馬表取得 & 前処理 ---
+    # get_race_entry() がすでに horse_number を index にセットして返す
     entry_df = get_race_entry(race_id)
     X_live   = preprocess_entry(entry_df, model.feature_names_in_)
     
@@ -88,19 +86,20 @@ def main(race_id, model_path, thresh_path):
     # --- 3) 予測 ---
     proba = model.predict_proba(X_live)[:,1]
     pred  = (proba >= threshold).astype(int)
+    # entry_df の index (= horse_number) と proba, pred の順番は一致している前提
     entry_df['pred_prob']   = proba
     entry_df['pred_target'] = pred
 
     # --- 4) レース結果取得 & ラベル付与 ---
-    result_df = get_race_result(race_id)  # 既存のスクレイパー
-    # result_df には 'rank' が入っている想定
+    # get_race_result() から返る DataFrame に horse_number カラムがある場合は index にする
+    result_df = get_race_result(race_id).set_index('horse_number')
     result_df['target'] = (result_df['rank'].astype(int) <= 3).astype(int)
 
     # --- 5) 予測結果と実結果をマージ & 評価 ---
-    merged = pd.merge(
-        entry_df.set_index('horse_number'),
-        result_df.set_index('horse_number')[['target','rank']],
-        left_index=True, right_index=True
+    # entry_df と result_df はどちらも index=horse_number なので join でシンプルに
+    merged = entry_df.join(
+        result_df[['target','rank']],
+        how='inner'
     )
     precision = precision_score(merged['target'], merged['pred_target'])
     recall    = recall_score(merged['target'], merged['pred_target'])
